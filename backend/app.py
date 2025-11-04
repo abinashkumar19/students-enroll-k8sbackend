@@ -3,14 +3,14 @@ import pymysql
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Allow frontend to call backend
+CORS(app)
 
-# RDS MySQL config
+# Database configuration
 db_config = {
     "host": "database-2.c9266mewer2a.eu-west-1.rds.amazonaws.com",
     "user": "admin",
     "password": "Cloud1234",
-    "database": "abi"
+    "database": "registrationdb"  # ✅ your DB name
 }
 
 def get_db_connection():
@@ -18,24 +18,27 @@ def get_db_connection():
         host=db_config["host"],
         user=db_config["user"],
         password=db_config["password"],
-        database=db_config["database"]
+        database=db_config["database"],
+        cursorclass=pymysql.cursors.DictCursor
     )
 
+# ---------------- SAVE USER ----------------
 @app.route("/api/save", methods=["POST"])
 def save_user():
     try:
         data = request.get_json()
+        username = data.get("username")
         email = data.get("email")
         password = data.get("password")
 
-        if not email or not password:
-            return jsonify({"error": "Email and password required"}), 400
+        if not username or not email or not password:
+            return jsonify({"error": "All fields are required"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        sql = "INSERT INTO users (email, password) VALUES (%s, %s)"
-        cursor.execute(sql, (email, password))
+        sql = "INSERT INTO users (username, email, password) VALUES (%s, %s, %s)"
+        cursor.execute(sql, (username, email, password))
         conn.commit()
 
         cursor.close()
@@ -44,6 +47,22 @@ def save_user():
         return jsonify({"message": "User registered successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ---------------- GET ALL USERS ----------------
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, created_at FROM users ORDER BY id DESC")
+        users = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return jsonify(users), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
